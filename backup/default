@@ -1,0 +1,73 @@
+## 清理并简化的 Nginx 配置
+# 说明：
+# - 将所有 HTTP 请求重定向到 HTTPS
+# - 为主域名提供 HTTPS 服务（托管博客静态文件）
+# - 为 WebSocket 路径代理到本地 V2Ray 服务
+
+# 1) HTTP -> HTTPS 重定向（包括 www 与裸域）
+server {
+    listen 80;
+    listen [::]:80;
+    server_name tvxl.top www.tvxl.top;
+
+    # 将所有 HTTP 请求重定向到 HTTPS（保留原始主机和 URI）
+    return 301 https://$host$request_uri;
+}
+
+# 2) HTTPS 主站（tvxl.top）- 提供博客页面并代理 websocket
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name tvxl.top;
+
+    # SSL 证书（Certbot 默认路径，确保证书包含 tvxl.top）
+    ssl_certificate /etc/letsencrypt/live/tvxl.top/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tvxl.top/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # TLS 参数由 Certbot 的 options-ssl-nginx.conf 提供，避免在此重复声明 ssl_ciphers/ssl_prefer_server_ciphers
+
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    # 基本网站内容（博客）
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # WebSocket 代理（路径必须与 V2Ray WebSocket 路径一致）
+    location /e732e03c-4c60-4d27-b9a6-92675691e618 {
+        proxy_pass http://127.0.0.1:43997; # 与 V2Ray 配置的端口一致
+
+        # 保持客户端的主机信息和转发信息
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket 升级头
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_http_version 1.1;
+        proxy_read_timeout 5d;
+    }
+
+    # 建议：开启 HSTS（仅在确认站点稳定并使用 HTTPS 时启用）
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+}
+
+# 3) HTTPS 的 www 子域重定向到裸域（保持单一规范域名）
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name www.tvxl.top;
+
+    ssl_certificate /etc/letsencrypt/live/tvxl.top/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tvxl.top/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://tvxl.top$request_uri;
+}
+

@@ -1,0 +1,9 @@
+Cleanup: move root backup files to backup/ and remove placeholders
+
+- Consolidated historical backup files into `backup/` and `backup/root-backups/`.
+- Removed placeholder `about.markdown` and `index.markdown` from repository root to avoid Jekyll duplicate destination conflicts.
+- Added "Backup & Recovery" section to `README.md` explaining how to restore these files if needed.
+
+Notes:
+- Original backups are preserved under `backup/` and `backup/root-backups/`.
+- Run `bundle exec jekyll build` to verify the site locally after restoring any file.
